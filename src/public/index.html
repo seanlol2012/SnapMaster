@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapMaster - 摄影助手 AI 教练</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+
+    /* Header */
+    .header {
+      text-align: center; padding: 40px 0 30px;
+      border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 2.2rem; font-weight: 700;
+      background: linear-gradient(135deg, #667eea, #764ba2, #f093fb);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header p { color: #888; margin-top: 8px; font-size: 0.95rem; }
+    .status-bar {
+      display: flex; justify-content: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .badge {
+      padding: 4px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 500;
+    }
+    .badge.on  { background: rgba(72,199,142,0.15); color: #48c78e; border: 1px solid rgba(72,199,142,0.3); }
+    .badge.off { background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .badge.model { background: rgba(102,126,234,0.15); color: #8899dd; border: 1px solid rgba(102,126,234,0.3); }
+    .panel.disabled { opacity: 0.5; pointer-events: none; position: relative; }
+    .panel.disabled::after {
+      content: "⚠️ 当前模型不支持此功能，请切换提供商";
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(15,15,26,0.85); color: #fbbf24; font-size: 1rem; border-radius: 16px; z-index: 10;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex; gap: 4px; margin-bottom: 24px;
+      background: rgba(255,255,255,0.04); border-radius: 12px; padding: 4px;
+    }
+    .tab {
+      flex: 1; padding: 12px 20px; text-align: center; cursor: pointer;
+      border-radius: 10px; font-size: 0.95rem; font-weight: 500;
+      transition: all 0.3s; color: #888; border: none; background: transparent;
+    }
+    .tab:hover { color: #ccc; background: rgba(255,255,255,0.04); }
+    .tab.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff; box-shadow: 0 4px 15px rgba(118,75,162,0.3);
+    }
+
+    /* Panel */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Card */
+    .card {
+      background: rgba(255,255,255,0.04); border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06); padding: 28px;
+      backdrop-filter: blur(10px);
+    }
+    .card h2 {
+      font-size: 1.3rem; margin-bottom: 8px; color: #eee;
+    }
+    .card .subtitle { color: #777; font-size: 0.85rem; margin-bottom: 20px; }
+
+    /* Upload Zone */
+    .upload-zone {
+      border: 2px dashed rgba(255,255,255,0.15); border-radius: 14px;
+      padding: 40px 20px; text-align: center; cursor: pointer;
+      transition: all 0.3s; position: relative; overflow: hidden;
+    }
+    .upload-zone:hover {
+      border-color: #764ba2;
+      background: rgba(118,75,162,0.06);
+    }
+    .upload-zone.has-image { padding: 12px; }
+    .upload-zone .icon { font-size: 2.8rem; margin-bottom: 12px; display: block; }
+    .upload-zone .hint { color: #999; font-size: 0.85rem; }
+    .upload-zone .hint strong { color: #764ba2; }
+    .upload-zone img.preview {
+      max-height: 280px; border-radius: 10px; object-fit: contain;
+    }
+    .upload-zone input { display: none; }
+
+    /* Text Inputs */
+    .input-group { margin-top: 18px; }
+    .input-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 0.88rem; }
+    .input-group textarea, .input-group input {
+      width: 100%; padding: 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: #e0e0e0; font-size: 0.95rem; font-family: inherit;
+      resize: vertical; outline: none; transition: border 0.3s;
+    }
+    .input-group textarea:focus, .input-group input:focus {
+      border-color: #764ba2;
+    }
+    .input-group textarea { min-height: 100px; }
+
+    /* Buttons */
+    .btn {
+      padding: 12px 28px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 1rem; font-weight: 600; transition: all 0.3s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff; box-shadow: 0 4px 15px rgba(118,75,162,0.3);
+      width: 100%; justify-content: center; margin-top: 18px;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(118,75,162,0.4); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08); color: #ccc; margin-top: 12px; width: 100%; justify-content: center;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.14); }
+
+    /* Result */
+    .result {
+      margin-top: 20px; padding: 20px; border-radius: 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06);
+      display: none; line-height: 1.7; font-size: 0.93rem;
+    }
+    .result.show { display: block; }
+    .result img { max-width: 100%; border-radius: 10px; margin-top: 16px; }
+    .result .markdown h3 { color: #764ba2; margin: 16px 0 8px; }
+    .result .markdown ul { padding-left: 20px; }
+    .result .markdown li { margin: 4px 0; color: #ccc; }
+    .result .markdown p { margin: 8px 0; color: #ddd; }
+    .result .markdown strong { color: #667eea; }
+
+    /* Spinner */
+    .spinner {
+      display: none; width: 24px; height: 24px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Chips / Tags */
+    .chip {
+      display: inline-block; padding: 4px 12px; border-radius: 20px;
+      font-size: 0.8rem; margin: 3px;
+      background: rgba(118,75,162,0.2); color: #c4a7e0;
+      border: 1px solid rgba(118,75,162,0.3);
+    }
+
+    /* Copy button */
+    .copy-btn {
+      padding: 6px 16px; border-radius: 6px; cursor: pointer;
+      background: rgba(102,126,234,0.2); color: #8899dd; border: 1px solid rgba(102,126,234,0.3);
+      font-size: 0.82rem; transition: all 0.2s; margin-top: 10px;
+    }
+    .copy-btn:hover { background: rgba(102,126,234,0.35); }
+    .copy-btn.copied { background: rgba(72,199,142,0.2); border-color: rgba(72,199,142,0.4); color: #48c78e; }
+
+    .error-msg { color: #f87171; background: rgba(248,113,113,0.1); padding: 12px; border-radius: 8px; margin-top: 12px; display:none; }
+    .error-msg.show { display:block; }
+    .generated-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .generated-section h4 { color: #48c78e; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>📸 SnapMaster</h1>
+      <p>AI 摄影助手 — 在线构图分析 · 智能修图 · Prompt 优化</p>
+      <div class="status-bar" id="status-bar">
+        <span class="badge model" id="badge-model">加载中...</span>
+        <span class="badge on" id="badge-vision">👁️ 视觉</span>
+        <span class="badge on" id="badge-image">🎨 生图</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="coach">🎓 摄影教练</button>
+      <button class="tab" data-tab="edit">✨ 智能修图</button>
+      <button class="tab" data-tab="optimize">💡 Prompt 优化</button>
+    </div>
+
+    <!-- ==================== Panel 1: 摄影教练 ==================== -->
+    <div class="panel active" id="panel-coach">
+      <div class="card">
+        <h2>🎓 摄影教练</h2>
+        <p class="subtitle">上传你现场拍的照片，AI 教你如何调整构图与参数拍出更好看的照片</p>
+
+        <div class="upload-zone" id="coach-upload">
+          <span class="icon">📷</span>
+          <p class="hint">点击上传或拖拽照片<br><strong>支持 JPG / PNG / WebP</strong></p>
+          <input type="file" id="coach-file" accept="image/*">
+        </div>
+
+        <button class="btn btn-primary" id="coach-btn" disabled>
+          <span class="spinner" id="coach-spinner"></span> 开始分析
+        </button>
+
+        <div class="error-msg" id="coach-error"></div>
+        <div class="result markdown" id="coach-result"></div>
+      </div>
+    </div>
+
+    <!-- ==================== Panel 2: 智能修图 ==================== -->
+    <div class="panel" id="panel-edit">
+      <div class="card">
+        <h2>✨ 智能修图</h2>
+        <p class="subtitle">上传照片 + 描述你的修改需求，AI 直接生成修改后的效果图</p>
+
+        <div class="upload-zone" id="edit-upload">
+          <span class="icon">🖼️</span>
+          <p class="hint">点击上传原始照片<br><strong>支持 JPG / PNG / WebP</strong></p>
+          <input type="file" id="edit-file" accept="image/*">
+        </div>
+
+        <div class="input-group">
+          <label>✏️ 修改指令</label>
+          <textarea id="edit-instruction" placeholder="例如：把背景换成海边日落，增加暖色调，人物居中..."></textarea>
+        </div>
+
+        <div class="input-group" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <span class="chip" onclick="setEditHint('把背景换成星空夜景')">🌃 星空夜景</span>
+          <span class="chip" onclick="setEditHint('加上柔焦梦幻光斑效果')">✨ 梦幻光斑</span>
+          <span class="chip" onclick="setEditHint('调成黑白高级感大片')">🖤 黑白大片</span>
+          <span class="chip" onclick="setEditHint('增加赛博朋克霓虹灯光')">🤖 赛博朋克</span>
+          <span class="chip" onclick="setEditHint('换成秋天金黄色调')">🍂 秋日氛围</span>
+        </div>
+
+        <button class="btn btn-primary" id="edit-btn" disabled>
+          <span class="spinner" id="edit-spinner"></span> 开始修图
+        </button>
+
+        <div class="error-msg" id="edit-error"></div>
+        <div class="result" id="edit-result"></div>
+      </div>
+    </div>
+
+    <!-- ==================== Panel 3: Prompt 优化 ==================== -->
+    <div class="panel" id="panel-optimize">
+      <div class="card">
+        <h2>💡 Prompt 优化器</h2>
+        <p class="subtitle">输入你的生图 Prompt，AI 帮你优化为专业级描述，让 AI 画得更好</p>
+
+        <div class="input-group">
+          <label>📝 原始 Prompt</label>
+          <textarea id="optimize-input" placeholder="例如：一只猫坐在窗边..."></textarea>
+        </div>
+
+        <button class="btn btn-primary" id="optimize-btn">
+          <span class="spinner" id="optimize-spinner"></span> 优化 Prompt
+        </button>
+
+        <div class="error-msg" id="optimize-error"></div>
+        <div class="result" id="optimize-result" style="white-space:pre-wrap;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============ 初始化：获取当前提供商状态 ============
+    async function initStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const status = await res.json();
+
+        document.getElementById("badge-model").textContent = "🤖 " + status.name;
+
+        const hasVision = status.features.includes("vision");
+        const hasImage = status.features.includes("image");
+
+        // 视觉状态
+        const badgeVision = document.getElementById("badge-vision");
+        badgeVision.className = "badge " + (hasVision ? "on" : "off");
+        badgeVision.textContent = (hasVision ? "👁️" : "🚫") + " 视觉";
+
+        // 生图状态
+        const badgeImage = document.getElementById("badge-image");
+        badgeImage.className = "badge " + (hasImage ? "on" : "off");
+        badgeImage.textContent = (hasImage ? "🎨" : "🚫") + " 生图";
+
+        // 禁用不支持的面板
+        if (!hasVision) {
+          document.getElementById("panel-coach").classList.add("disabled");
+          document.getElementById("panel-edit").classList.add("disabled");
+        }
+        if (!hasImage) {
+          // 编辑面板的生图部分降级提示
+          document.getElementById("edit-result").dataset.noImage = "true";
+        }
+      } catch (e) {
+        document.getElementById("badge-model").textContent = "⚠️ 未连接";
+      }
+    }
+    initStatus();
+    // ============ Tab 切换 ============
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+      });
+    });
+
+    // ============ Helper: 显示/隐藏 spinner ============
+    function setLoading(btnId, spinnerId, loading) {
+      const btn = document.getElementById(btnId);
+      const spinner = document.getElementById(spinnerId);
+      btn.disabled = loading;
+      spinner.style.display = loading ? "inline-block" : "none";
+    }
+
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      el.textContent = "❌ " + msg;
+      el.classList.add("show");
+    }
+    function hideError(id) { document.getElementById(id).classList.remove("show"); }
+
+    function showResult(id, html) {
+      const el = document.getElementById(id);
+      el.innerHTML = html;
+      el.classList.add("show");
+    }
+
+    // ============ 文件上传预览 ============
+    function setupUpload(uploadId, fileId, btnId) {
+      const zone = document.getElementById(uploadId);
+      const fileInput = document.getElementById(fileId);
+
+      zone.addEventListener("click", () => fileInput.click());
+      zone.addEventListener("dragover", e => { e.preventDefault(); zone.style.borderColor = "#764ba2"; });
+      zone.addEventListener("dragleave", () => { zone.style.borderColor = ""; });
+      zone.addEventListener("drop", e => {
+        e.preventDefault();
+        zone.style.borderColor = "";
+        if (e.dataTransfer.files.length) {
+          fileInput.files = e.dataTransfer.files;
+          fileInput.dispatchEvent(new Event("change"));
+        }
+      });
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          zone.classList.add("has-image");
+          zone.innerHTML = `<img class="preview" src="${e.target.result}" alt="预览"><input type="file" id="${fileId}" accept="image/*">`;
+          document.getElementById(btnId).disabled = false;
+          // 重新绑定
+          zone.querySelector("input").addEventListener("change", fileInput.onchange);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      return fileInput;
+    }
+
+    const coachFileInput = setupUpload("coach-upload", "coach-file", "coach-btn");
+    const editFileInput = setupUpload("edit-upload", "edit-file", "edit-btn");
+
+    // Edit instruction change
+    document.getElementById("edit-instruction").addEventListener("input", function() {
+      document.getElementById("edit-btn").disabled = !editFileInput.files.length || !this.value.trim();
+    });
+
+    // ============ API 调用 ============
+    async function apiPost(url, body, isFormData = false) {
+      const opts = { method: "POST" };
+      if (isFormData) {
+        opts.body = body;
+      } else {
+        opts.headers = { "Content-Type": "application/json" };
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "请求失败");
+      return data;
+    }
+
+    // ============ 1. 摄影教练 ============
+    document.getElementById("coach-btn").addEventListener("click", async () => {
+      const file = coachFileInput.files[0];
+      if (!file) return;
+
+      setLoading("coach-btn", "coach-spinner", true);
+      hideError("coach-error");
+      document.getElementById("coach-result").classList.remove("show");
+
+      try {
+        const form = new FormData();
+        form.append("image", file);
+        const res = await apiPost("/api/coach", form, true);
+        showResult("coach-result", "<h3>📸 分析结果</h3>" + res.data.replace(/\n/g, "<br>"));
+      } catch (e) {
+        showError("coach-error", e.message);
+      } finally {
+        setLoading("coach-btn", "coach-spinner", false);
+      }
+    });
+
+    // ============ 2. 智能修图 ============
+    document.getElementById("edit-btn").addEventListener("click", async () => {
+      const file = editFileInput.files[0];
+      const instruction = document.getElementById("edit-instruction").value.trim();
+      if (!file || !instruction) return;
+
+      setLoading("edit-btn", "edit-spinner", true);
+      hideError("edit-error");
+      document.getElementById("edit-result").classList.remove("show");
+
+      try {
+        const form = new FormData();
+        form.append("image", file);
+        form.append("instruction", instruction);
+        const res = await apiPost("/api/edit", form, true);
+
+        let html = `
+          <h3>📋 原图分析</h3>
+          <p>${res.data.description}</p>
+          <p style="color:#764ba2;margin-top:8px;">💡 ${res.data.suggestion}</p>
+        `;
+
+        if (res.data.generatedImage) {
+          html += `
+            <div class="generated-section">
+              <h4>🎨 AI 生成效果图</h4>
+              <img src="${res.data.generatedImage}" alt="生成效果" onerror="this.outerHTML='<p style=color:#f87171>图片加载失败</p>'">
+            </div>
+          `;
+        }
+        if (res.data.genError) {
+          html += `<p style="color:#fbbf24;margin-top:8px;">⚠️ 图像生成失败：${res.data.genError}</p>`;
+        }
+        if (res.data.editPrompt) {
+          html += `
+            <p style="color:#888;margin-top:8px;font-size:0.82rem;">生图 Prompt: ${res.data.editPrompt}</p>
+          `;
+        }
+
+        showResult("edit-result", html);
+      } catch (e) {
+        showError("edit-error", e.message);
+      } finally {
+        setLoading("edit-btn", "edit-spinner", false);
+      }
+    });
+
+    // ============ 3. Prompt 优化 ============
+    document.getElementById("optimize-btn").addEventListener("click", async () => {
+      const prompt = document.getElementById("optimize-input").value.trim();
+      if (!prompt) return alert("请输入原始 Prompt");
+
+      setLoading("optimize-btn", "optimize-spinner", true);
+      hideError("optimize-error");
+      document.getElementById("optimize-result").classList.remove("show");
+
+      try {
+        const res = await apiPost("/api/optimize-prompt", { prompt });
+
+        let html = `
+          <h3>📝 原始 Prompt</h3>
+          <p style="color:#888;">${escapeHtml(res.data.original || prompt)}</p>
+
+          <h3 style="color:#48c78e;">🚀 优化后 Prompt</h3>
+          <div style="background:rgba(72,199,142,0.08);padding:14px;border-radius:8px;margin:8px 0;">
+            <p style="color:#e0e0e0;">${escapeHtml(res.data.optimized || "")}</p>
+          </div>
+          <button class="copy-btn" onclick="copyOptimized(this, '${escapeHtml((res.data.optimized || "").replace(/'/g, "\\'"))}')">📋 复制</button>
+        `;
+
+        if (res.data.changes?.length) {
+          html += `<h3>🔧 优化点</h3><ul>${res.data.changes.map(c => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
+        }
+        if (res.data.tips) {
+          html += `<p style="color:#fbbf24;margin-top:8px;">💡 ${escapeHtml(res.data.tips)}</p>`;
+        }
+
+        showResult("optimize-result", html);
+      } catch (e) {
+        showError("optimize-error", e.message);
+      } finally {
+        setLoading("optimize-btn", "optimize-spinner", false);
+      }
+    });
+
+    // ============ Helper Functions ============
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function setEditHint(text) {
+      document.getElementById("edit-instruction").value = text;
+      document.getElementById("edit-instruction").dispatchEvent(new Event("input"));
+    }
+
+    function copyOptimized(btn, text) {
+      const unescaped = btn.parentElement.querySelector("p").textContent;
+      navigator.clipboard.writeText(unescaped).then(() => {
+        btn.textContent = "✅ 已复制!";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = "📋 复制"; btn.classList.remove("copied"); }, 2000);
+      });
+    }
+
+    // Optimize input: enable button always (text-only, no image needed)
+    document.getElementById("optimize-input").addEventListener("input", function() {
+      document.getElementById("optimize-btn").disabled = !this.value.trim();
+    });
+    document.getElementById("optimize-btn").disabled = true;
+  </script>
+</body>
+</html>

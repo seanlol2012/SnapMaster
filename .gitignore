@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.local
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+generated-images/
